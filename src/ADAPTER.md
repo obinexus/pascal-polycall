@@ -1,8 +1,8 @@
-# Pascal adapter (scaffold)
+# Adapter boundary
 
-Implement the Pascal adapter here. It must call across the FFI boundary only:
+`PascalPolycall.pas` retains the UTF-8 path while passing its NUL-terminated
+`PAnsiChar` representation to `pascal_polycall_run_config()` using the C calling
+convention. The native shim makes exactly one call to
+`polycall_ffi_run_config(config_path, 1)` and returns its status unchanged.
 
-    status = polycall_ffi_run_config("pascal-polycallrc", /*run=*/1)
-
-Return/raise a Pascal-native error when `status` is non-zero. Do not parse
-config or duplicate any core logic. See ../../../docs/adapter-pattern.md.
+No layer in this package parses configuration or implements runtime behavior.

@@ -1,4 +1,8 @@
-# Pascal tests (scaffold)
+# Tests
 
-Add a smoke test that loads `../pascal-polycallrc`, calls the adapter, and asserts a
-zero status. Mirror the reference bindings (pypolycall / rust-polycall).
+- `pascal_polycall_adapter_test.c` verifies exact path forwarding, validation
+  mode `1`, null handling, and unchanged core statuses without libpolycall.
+- `pascal_polycall_smoke.pas` exercises explicit/default paths, status returns,
+  and `EPolycallError` through the real Pascal/C boundary when `fpc` is present.
+- `package.test.js` validates npm metadata, exports, relative directory indexes,
+  author, license, and required source files.
