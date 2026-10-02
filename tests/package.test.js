@@ -17,8 +17,6 @@ assert.equal(author, 'Nnamdi Michael Okpala <okpalan@protonmail.com>');
 
 const metadataKeys = {
   src: 'src',
-  include: 'include',
-  generated: 'generated',
   dist: 'dist',
   examples: 'example',
   tests: 'test',
@@ -35,17 +33,12 @@ for (const [name, directory] of Object.entries(binding.directories)) {
 }
 
 assert.ok(binding.directories.src.relativeFiles.includes('PascalPolycall.pas'));
-assert.ok(binding.directories.src.relativeFiles.includes('pascal_polycall.c'));
-assert.ok(binding.directories.include.relativeFiles.includes('pascal_polycall.h'));
-assert.ok(binding.directories.generated.relativeFiles.includes('polycall/polycall_ffi.h'));
 assert.ok(binding.directories.examples.relativeFiles.includes('basic.pas'));
+assert.ok(binding.directories.tests.relativeFiles.includes('pascal_polycall_test.pas'));
 assert.throws(() => binding.resolve('src', '..', 'package.json'), RangeError);
 
 for (const file of [
   binding.pascalUnit,
-  binding.nativeSource,
-  binding.nativeHeader,
-  binding.ffiHeader,
   binding.config,
   binding.manifest,
   binding.makefile

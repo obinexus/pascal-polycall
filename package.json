@@ -1,15 +1,13 @@
 {
   "name": "@obinexusltd/pascal-polycall",
   "version": "1.0.0",
-  "description": "Free Pascal source binding for libpolycall 1.5",
+  "description": "Free Pascal binding for the Polycall core (polycall >= 1.1.0, binding ABI 1): cdecl externals over <polycall.h>.",
   "main": "index.js",
   "type": "commonjs",
   "exports": {
     ".": "./index.js",
     "./package.json": "./package.json",
     "./src/*": "./src/*",
-    "./include/*": "./include/*",
-    "./generated/*": "./generated/*",
     "./dist/*": "./dist/*",
     "./examples/*": "./examples/*",
     "./tests/*": "./tests/*",
@@ -20,8 +18,6 @@
   "files": [
     "index.js",
     "src/",
-    "include/",
-    "generated/",
     "dist/",
     "examples/",
     "tests/",
@@ -36,8 +32,6 @@
   "directories": {
     "lib": "src",
     "src": "src",
-    "include": "include",
-    "generated": "generated",
     "dist": "dist",
     "example": "examples",
     "test": "tests",
@@ -46,7 +40,7 @@
   "scripts": {
     "build": "make",
     "build:pascal": "make pascal",
-    "test": "make test && make test-pascal-if-available && npm run verify:dry && npm run test:package",
+    "test": "make test && npm run verify:dry && npm run test:package",
     "test:pascal": "make test-pascal",
     "test:package": "node tests/package.test.js",
     "verify:dry": "make verify-dry",

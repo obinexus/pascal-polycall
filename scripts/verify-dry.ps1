@@ -1,26 +1,18 @@
 $ErrorActionPreference = 'Stop'
 
+# Thin-adapter audit (see verify-dry.sh).
 $root = Split-Path -Parent $PSScriptRoot
-$adapterPath = Join-Path $root 'src/pascal_polycall.c'
-$pascalPath = Join-Path $root 'src/PascalPolycall.pas'
-$forbidden = 'fopen|open\(|CreateFile|sscanf|strtok|socket\(|connect\('
-$matches = Select-String -Path $adapterPath,$pascalPath -Pattern $forbidden
-
-if ($matches) {
-    $matches | ForEach-Object { Write-Error $_.Line }
+$sourcePath = Join-Path $root 'src/PascalPolycall.pas'
+$source = Get-Content -Raw $sourcePath
+$found = Select-String -Path $sourcePath -Pattern 'AssignFile|TFileStream|Sockets|fpSocket|fpConnect|TStringList'
+if ($found) {
+    $found | ForEach-Object { Write-Error $_.Line }
     throw 'pascal-polycall must not parse configuration or implement runtime logic'
 }
-
-$adapter = Get-Content -Raw $adapterPath
-$pascal = Get-Content -Raw $pascalPath
-if (-not $adapter.Contains('polycall_ffi_run_config(config_path, 1)')) {
-    throw 'pascal-polycall does not forward through polycall_ffi_run_config'
+foreach ($sym in @('polycall_ffi_abi_version', 'polycall_ffi_run_config', 'polycall_call',
+                   'polycall_peer_open', 'polycall_peer_send', 'polycall_peer_recv')) {
+    if (-not $source.Contains("external PolycallLib name '$sym'")) {
+        throw "pascal-polycall does not declare $sym"
+    }
 }
-if (-not $pascal.Contains('PAnsiChar(StablePath)')) {
-    throw 'pascal-polycall does not marshal its UTF-8 path as PAnsiChar'
-}
-if (-not $pascal.Contains('raise EPolycallError.Create(Status)')) {
-    throw 'pascal-polycall does not expose idiomatic Pascal error handling'
-}
-
 Write-Output 'pascal-polycall thin-adapter check: PASS'

@@ -1,127 +1,84 @@
 # @obinexusltd/pascal-polycall
 
-Free Pascal source binding for
-[libpolycall](https://github.com/obinexus/libpolycall) 1.5.
+Free Pascal binding for the [Polycall](https://github.com/obinexus/polycall)
+core (**polycall >= 1.1.0**, binding ABI v1).
 
-The package is a thin adapter. `PascalPolycall.pas` converts a Pascal
-`UTF8String` to a stable `PAnsiChar`, and the native shim makes exactly one
-call to `polycall_ffi_run_config(config_path, 1)`. Configuration parsing,
-validation, and runtime behavior remain in libpolycall.
+`src/PascalPolycall.pas` declares the core's binding ABI (`<polycall.h>`,
+`docs/BINDING_ABI.md` in the core repository) as `cdecl` externals of the
+`polycall` library with their exact C types -- there is no C shim.
+Configuration parsing, validation, networking and the peer protocol stay in
+the core.
 
 ## Install
 
-```powershell
+```sh
 npm install @obinexusltd/pascal-polycall
 ```
 
-This is a native source package. The npm tarball contains the Pascal and C
-sources, public and generated headers, examples, tests, scripts, Makefile,
-manifest, configuration, and license—not platform-specific binaries.
+This is a native source package (not yet published): the tarball contains
+the Pascal unit, examples, tests, scripts, Makefile, manifest, configuration
+and license -- no binaries, and its JavaScript entry point loads nothing.
 
 ## Pascal API
 
 ```pascal
-program Service;
+uses PascalPolycall;
 
-{$mode objfpc}{$H+}
+PolycallCheckABI;                                  { EPolycallError unless ABI 1 }
+WriteLn(PolycallVersion);                          { '1.1.0' }
 
-uses
-  PascalPolycall;
+Status := PolycallRunConfig('pascal-polycallrc');  { polycall_ffi_run_config(path, 1) }
+Status := PolycallRunConfig('pascal-polycallrc', False);   { validate only }
+PolycallRunConfigOrRaise('pascal-polycallrc');     { raises EPolycallError }
 
-var
-  Status: LongInt;
+WriteLn(PolycallCall('127.0.0.1:7000', 'inventory', 'get',
+  '{"item_id":"widget-a"}', 2000));
 
-begin
-  Status := PolycallRunConfig('pascal-polycallrc');
-  if Status <> 0 then
-    Halt(Status);
-end.
-```
-
-For exception-oriented startup code:
-
-```pascal
+Alpha := TPolycallPeer.Create('alpha');            { 127.0.0.1:<ephemeral> }
+Beta := TPolycallPeer.Create('beta', '127.0.0.1:0', Token);
 try
-  PolycallRunConfigOrRaise('pascal-polycallrc');
-except
-  on Error: EPolycallError do
-    WriteLn('libpolycall status: ', Error.Status);
+  Alpha.RegisterPeer('beta', Beta.Endpoint);
+  Alpha.Send('beta', 'hello'#0'bytes', 'msg-1');    { exactly one delivery attempt }
+  Msg := Beta.Receive(5000);                        { Msg.Sender, Msg.Id, Msg.Payload }
+finally
+  Alpha.Free;                                       { Free closes the node }
+  Beta.Free;
 end;
 ```
 
-- `PolycallRunConfig` returns the libpolycall status unchanged.
-- `PolycallRunConfigOrRaise` raises `EPolycallError` for nonzero statuses.
-- Omitting the path uses `pascal-polycallrc`.
-- Paths cross the C boundary as NUL-terminated UTF-8 strings.
+Also `TPolycallPeer.CreateSendOnly`, `Close` (a second `Close` raises
+`POLYCALL_E_INVALID_HANDLE`), `NodeId`, `UnregisterPeer`, `List`, `Ping`,
+`TryReceive`, `Cancel` (wakes a thread blocked in `Receive`), `Health`,
+`PolycallDescribe`, `PolycallCallStatus` (non-raising),
+`PolycallStrError`, `PolycallLastError`.
+
+`EPolycallError` exposes `Status` (negative `POLYCALL_E_*` constant),
+`StatusName` (`polycall_strerror`), `Detail` (`polycall_last_error`) and, for
+`PolycallCall`, `Output` (the remote error object).
 
 ## Build and test
 
-Build the native adapter archive and run all available checks:
+Needs Free Pascal >= 3.2 (Debian: `apt-get install fp-compiler`) and an
+installed core found through pkg-config:
 
-```powershell
-npm run build
-npm test
+```sh
+export PKG_CONFIG_PATH=/opt/polycall/lib/pkgconfig LD_LIBRARY_PATH=/opt/polycall/lib
+make            # compile the unit
+make test       # real-core test + interop with the polycall CLI
+make example    # examples/basic.pas
+npm test        # make test + verify-dry + npm package test
 ```
 
-The current machine has GCC and GNU Make but does not have Free Pascal (`fpc`)
-installed. `npm test` therefore runs the native mock contract test, boundary
-audit, and npm package tests, while reporting the Pascal smoke test as skipped.
-When `fpc` is on `PATH`, that smoke test runs automatically.
+Programs using the unit need `-Fl<prefix>/lib` (the Makefile takes it from
+`pkg-config --variable=libdir polycall`); programs using `TThread` on Unix
+put `cthreads` first in their `uses` clause. On Windows the unit expects
+`polycall.dll` (MSVC build) or, with `-dPOLYCALL_MINGW`, `libpolycall.dll`;
+Windows is not tested yet.
 
-You can invoke the Pascal-specific operations directly:
-
-```powershell
-npm run build:pascal
-npm run test:pascal
-```
-
-The native test proves that paths are forwarded unchanged, validation mode is
-always `1`, and success/failure statuses are not rewritten. The Pascal test
-exercises default and explicit paths plus `EPolycallError` through the actual
-Pascal/C link boundary.
-
-## Link with libpolycall
-
-Build libpolycall first, then make its library and this package's adapter
-archive visible to the Free Pascal linker. A typical GNU-compatible command is:
-
-```powershell
-fpc -Mobjfpc `
-  -Fu./src `
-  -Fl./lib `
-  -FlC:/path/to/libpolycall/lib `
-  -k-lpascal_polycall `
-  -k-lpolycall `
-  examples/basic.pas
-```
-
-Run `npm run build` first so `lib/libpascal_polycall.a` exists. Adjust library
-paths and names for the selected libpolycall build and platform.
-
-## JavaScript build-tool entry point
-
-The CommonJS entry point indexes every published project directory:
-
-```js
-const binding = require('@obinexusltd/pascal-polycall');
-
-console.log(binding.pascalUnit);
-console.log(binding.directories.src.relativeFiles);
-console.log(binding.resolve('examples', 'basic.pas'));
-```
-
-Indexed relative directories are `src`, `include`, `generated`, `dist`,
-`examples`, `tests`, and `scripts`. `resolve()` prevents traversal outside the
-selected directory.
-
-## Publish
-
-```powershell
-npm pack --dry-run
-npm publish --access public
-```
-
-Publishing is never performed automatically.
+`make test` runs `tests/pascal_polycall_test.pas` through `tests/run-real.sh`,
+which starts `polycall peer serve` and `polycall start`; a missing `fpc` or
+polycall CLI is reported as SKIP (exit 77), never as success. See
+[tests/TESTS.md](tests/TESTS.md).
 
 ## License
 

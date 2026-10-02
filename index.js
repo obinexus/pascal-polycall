@@ -1,12 +1,14 @@
 'use strict';
 
+// Source package entry point: indexes the published Free Pascal sources for
+// build tooling. The unit binds the installed Polycall core (>= 1.1.0,
+// binding ABI 1) with cdecl externals; this module loads nothing.
+
 const fs = require('node:fs');
 const path = require('node:path');
 
 const relativeDirectories = Object.freeze({
   src: 'src',
-  include: 'include',
-  generated: 'generated',
   dist: 'dist',
   examples: 'examples',
   tests: 'tests',
@@ -64,9 +66,6 @@ module.exports = Object.freeze({
   directories,
   resolve,
   pascalUnit: path.join(__dirname, 'src', 'PascalPolycall.pas'),
-  nativeSource: path.join(__dirname, 'src', 'pascal_polycall.c'),
-  nativeHeader: path.join(__dirname, 'include', 'pascal_polycall.h'),
-  ffiHeader: path.join(__dirname, 'generated', 'polycall', 'polycall_ffi.h'),
   config: path.join(__dirname, 'pascal-polycallrc'),
   manifest: path.join(__dirname, 'polycall-binding.json'),
   makefile: path.join(__dirname, 'Makefile')

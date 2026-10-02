@@ -3,7 +3,7 @@ program PascalPolycallExample;
 {$mode objfpc}{$H+}
 
 uses
-  PascalPolycall;
+  SysUtils, PascalPolycall;
 
 var
   ConfigPath: UTF8String;
@@ -14,6 +14,16 @@ begin
   else
     ConfigPath := 'pascal-polycallrc';
 
-  PolycallRunConfigOrRaise(ConfigPath);
-  WriteLn('libpolycall completed successfully');
+  try
+    PolycallCheckABI;
+    WriteLn('pascal-polycall: libpolycall ', PolycallVersion);
+    PolycallRunConfigOrRaise(ConfigPath);
+    WriteLn('pascal-polycall: ''', ConfigPath, ''' is valid for this build');
+  except
+    on E: EPolycallError do
+    begin
+      WriteLn(StdErr, 'pascal-polycall: ', E.Message);
+      Halt(1);
+    end;
+  end;
 end.

@@ -1,12 +1,18 @@
 {
   "name": "pascal-polycall",
-  "version": "1.5.0",
+  "version": "1.0.0",
   "package": "@obinexusltd/pascal-polycall",
   "language": "Pascal",
   "adapter": true,
   "ffi": true,
+  "abi": 1,
   "config": "pascal-polycallrc",
-  "core": "../../src",
+  "core": "polycall >= 1.1.0 (binding ABI 1)",
+  "core_repository": "https://github.com/obinexus/polycall",
+  "repository": "https://github.com/obinexus/pascal-polycall",
+  "entrypoint": "src/PascalPolycall.pas",
+  "build": "make",
+  "test": "make test",
   "license": "MIT",
   "author": "Nnamdi Michael Okpala <okpalan@protonmail.com>"
 }

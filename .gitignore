@@ -7,3 +7,6 @@
 *.exe
 *.o
 *.ppu
+*.tgz
+.polycall-qa.*
+pas_cli_*
