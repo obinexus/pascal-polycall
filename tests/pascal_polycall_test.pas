@@ -133,6 +133,52 @@ begin
   Check(Pos('POLYCALL_E_UNKNOWN', PolycallStrError(-999)) = 1, 'strerror of an unknown code');
 end;
 
+{ Prefix + Bytes as a UTF8String, byte for byte (no code page conversion). }
+function Utf8Path(const Prefix: string; const Bytes: RawByteString): UTF8String;
+var
+  R: RawByteString;
+begin
+  SetLength(R, Length(Prefix) + Length(Bytes));
+  if Length(Prefix) > 0 then
+    Move(Prefix[1], R[1], Length(Prefix));
+  if Length(Bytes) > 0 then
+    Move(Bytes[1], R[Length(Prefix) + 1], Length(Bytes));
+  SetCodePage(R, CP_UTF8, False);
+  Result := R;
+end;
+
+{ tests/fixtures/<U>: a valid configuration whose file name is not ASCII,
+  passed to polycall_ffi_run_config as its UTF-8 bytes. }
+procedure TestUnicodePath(const Fx: string);
+const
+  U: RawByteString = #$C3#$BC'n'#$C3#$AF'c'#$C3#$B8'd'#$C3#$A9'-'#$E9#$85#$8D#$E7#$BD#$AE'-polycallrc';
+var
+  P, Missing: UTF8String;
+  D: RawByteString;
+begin
+  P := Utf8Path(Fx, U);
+  Missing := Utf8Path(Fx + 'missing-', U);
+  Expect(POLYCALL_OK, PolycallRunConfig(P), 'run_config: non-ASCII (UTF-8) path, strict');
+  Expect(POLYCALL_OK, PolycallRunConfig(P, False), 'run_config: non-ASCII (UTF-8) path, validate');
+  try
+    Check(Pos('log_level', PolycallDescribe(P)) > 0, 'describe: non-ASCII (UTF-8) path');
+  except
+    on E: Exception do Check(False, 'describe: non-ASCII (UTF-8) path', E.Message);
+  end;
+  try
+    PolycallRunConfigOrRaise(Missing);
+    Check(False, 'run_config: missing non-ASCII path -> E_NOT_FOUND', 'no exception');
+  except
+    on E: EPolycallError do
+    begin
+      Expect(POLYCALL_E_NOT_FOUND, E.Status, 'run_config: missing non-ASCII path -> E_NOT_FOUND');
+      D := E.Detail;
+      Check(Pos(RawByteString('missing-') + U, D) > 0,
+        'run_config: last_error detail keeps the UTF-8 path bytes', E.Detail);
+    end;
+  end;
+end;
+
 procedure TestRunConfig;
 var
   Fx, Desc: string;
@@ -169,6 +215,7 @@ begin
   Expect(POLYCALL_E_UNSUPPORTED, Status, 'PolycallRunConfigOrRaise raises with the status');
   Desc := PolycallDescribe(Root + '/pascal-polycallrc');
   Check((Copy(Desc, 1, 1) = '{') and (Pos('log_level', Desc) > 0), 'describe: JSON', Desc);
+  TestUnicodePath(Fx);
 end;
 
 procedure TestCall;
@@ -179,6 +226,8 @@ begin
     'call: no runtime -> E_TRANSPORT');
   Expect(POLYCALL_E_INVALID_ARGUMENT, PolycallCallStatus('127.0.0.1:1', 'debug', 'echo', '{}', 0, Out1),
     'call: timeout 0 -> E_INVALID_ARGUMENT');
+  Expect(POLYCALL_E_INVALID_ARGUMENT, PolycallCallStatus('127.0.0.1:1', 'debug', 'echo', '{}', 600001, Out1),
+    'call: timeout 600001 -> E_INVALID_ARGUMENT');
   Ep := GetEnvironmentVariable('POLYCALL_RPC_ENDPOINT');
   if Ep = '' then
   begin
@@ -190,6 +239,9 @@ begin
   Out1 := PolycallCall(Ep, 'debug', 'echo', '{"p":true}', 3000);
   Check(Out1 = '{"echo":{"p":true}}', 'call: debug.echo exact output', Out1);
   Check(PolycallCall(Ep, 'debug', 'echo') = '{"echo":null}', 'call: empty input is sent as null');
+  Expect(POLYCALL_OK, PolycallCallStatus(Ep, 'debug', 'echo', '{}', 600000, Out1),
+    'call: timeout 600000 (the maximum) accepted');
+  Check(Out1 = '{"echo":{}}', 'call: timeout 600000 output', Out1);
   Expect(POLYCALL_E_NOT_FOUND, PolycallCallStatus(Ep, 'inventory', 'teleport', '{}', 3000, Out1),
     'call: unknown operation -> E_NOT_FOUND');
   Check(Pos('operation.unknown', Out1) > 0, 'call: unknown operation error object', Out1);
@@ -330,6 +382,43 @@ begin
     M := B.Receive(1000, 4);
     Check((M.Payload = '0123456789') and (M.Id = 'm-small'),
       'recv: 4-byte buffer -> E_TOO_LARGE kept the message queued (regrown)');
+    A.Send(B.Endpoint, '0123456789', 'm-exact');
+    M := B.Receive(1000, 10);
+    Check((M.Payload = '0123456789') and (M.Id = 'm-exact'), 'recv: buffer of exactly the payload size');
+    Check(not B.TryReceive(M, 0), 'recv: poll (timeout 0) on an empty inbox -> E_TIMEOUT');
+    A.Send(B.Endpoint, 'queued', 'm-queued');
+    Check(B.TryReceive(M, 0) and (M.Id = 'm-queued'), 'recv: poll (timeout 0) returns a queued message');
+    A.Send(B.Endpoint, 'queued', 'm-queued-2');
+    T0 := Now;
+    M := B.Receive(PolycallWaitForever);
+    Check((M.Id = 'm-queued-2') and (MilliSecondsBetween(Now, T0) < 2000),
+      'recv: PolycallWaitForever (UINT32_MAX) returns a queued message at once');
+
+    { identifiers: 1..63 bytes; the unit's buffers are 64 incl. NUL }
+    S := TPolycallPeer.CreateSendOnly(StringOfChar('n', 63));
+    try
+      Check(S.NodeId = StringOfChar('n', 63), 'ids: 63-byte node id round-trips', S.NodeId);
+      S.Send(B.Endpoint, 'id63', StringOfChar('m', 63));
+      M := B.Receive(5000);
+      Check((M.Sender = StringOfChar('n', 63)) and (M.Id = StringOfChar('m', 63)),
+        'ids: 63-byte sender and message id arrive intact', M.Sender + ' / ' + M.Id);
+    finally
+      S.Free;
+    end;
+    Status := 0;
+    try
+      TPolycallPeer.CreateSendOnly(StringOfChar('n', 64)).Free;
+    except
+      on E: Exception do Status := StatusOf(E);
+    end;
+    Expect(POLYCALL_E_INVALID_ARGUMENT, Status, 'ids: 64-byte node id -> E_INVALID_ARGUMENT');
+    Status := 0;
+    try
+      A.Send(B.Endpoint, 'x', StringOfChar('m', 64));
+    except
+      on E: Exception do Status := StatusOf(E);
+    end;
+    Expect(POLYCALL_E_INVALID_ARGUMENT, Status, 'ids: 64-byte message id -> E_INVALID_ARGUMENT');
 
     { send-only node }
     S := TPolycallPeer.CreateSendOnly('pas-sendonly');
@@ -426,6 +515,65 @@ type
     procedure Execute; override;
   end;
 
+  { One thread of concurrent calls: 20 debug.echo calls with distinct inputs
+    (exact outputs) and an unknown operation (status + name), then 50 rounds
+    of the string-returning calls on its own node. }
+  TCallerThread = class(TThread)
+  public
+    Index: Integer;
+    Rpc: string;
+    CallWrong, NodeWrong: Integer;
+    procedure Execute; override;
+  end;
+
+procedure TCallerThread.Execute;
+var
+  I: Integer;
+  Input, Output, Name, Ep0: string;
+  Node: TPolycallPeer;
+begin
+  CallWrong := 0;
+  NodeWrong := 0;
+  if Rpc <> '' then
+  begin
+    for I := 0 to 19 do
+      try
+        Input := Format('{"t":%d,"i":%d}', [Index, I]);
+        if PolycallCall(Rpc, 'debug', 'echo', Input, 5000) <> '{"echo":' + Input + '}' then
+          Inc(CallWrong);
+      except
+        on E: Exception do Inc(CallWrong);
+      end;
+    if PolycallCallStatus(Rpc, 'inventory', 'teleport', '{}', 5000, Output) <> POLYCALL_E_NOT_FOUND then
+      Inc(CallWrong)
+    else if Pos('operation.unknown', Output) = 0 then
+      Inc(CallWrong);
+    try
+      PolycallCall(Rpc, 'inventory', 'teleport', '{}', 5000);
+      Inc(CallWrong);
+    except
+      on E: EPolycallError do
+        if (E.Status <> POLYCALL_E_NOT_FOUND) or (Pos('POLYCALL_E_NOT_FOUND', E.StatusName) <> 1) then
+          Inc(CallWrong);
+    end;
+  end;
+  Name := Format('pas-c%d', [Index]);
+  try
+    Node := TPolycallPeer.Create(Name);
+    try
+      Ep0 := Node.Endpoint;
+      for I := 1 to 50 do
+        if (Node.NodeId <> Name) or (Node.Endpoint <> Ep0) or
+           (Pos('"node_id":"' + Name + '"', Node.Health) = 0) or (Node.List <> '{}') then
+          Inc(NodeWrong);
+    finally
+      Node.Free;
+    end;
+  except
+    on E: Exception do Inc(NodeWrong, 50);
+  end;
+end;
+
 procedure TBlockedReceiver.Execute;
 begin
   Status := 0;
@@ -464,6 +612,8 @@ var
   R, Rx: TPolycallPeer;
   T: TBlockedReceiver;
   Senders: array[0..3] of TSenderThread;
+  Callers: array[0..3] of TCallerThread;
+  Calls, Nodes: Integer;
   Seen: TStringList;
   M: TPolycallMessage;
   I, Fails, Status: Integer;
@@ -546,6 +696,31 @@ begin
     Seen.Free;
     Rx.Free;
   end;
+
+  Calls := 0;
+  Nodes := 0;
+  for I := 0 to 3 do
+  begin
+    Callers[I] := TCallerThread.Create(True);
+    Callers[I].Index := I;
+    Callers[I].Rpc := GetEnvironmentVariable('POLYCALL_RPC_ENDPOINT');
+    Callers[I].Start;
+  end;
+  for I := 0 to 3 do
+  begin
+    Callers[I].WaitFor;
+    Inc(Calls, Callers[I].CallWrong);
+    Inc(Nodes, Callers[I].NodeWrong);
+    Callers[I].Free;
+  end;
+  if GetEnvironmentVariable('POLYCALL_RPC_ENDPOINT') = '' then
+    Skip('concurrent calls: 4 threads x 20 PolycallCall, exact outputs and errors',
+      'POLYCALL_RPC_ENDPOINT not set (run via tests/run-real.sh)')
+  else
+    Check(Calls = 0, 'concurrent calls: 4 threads x 20 PolycallCall, exact outputs and errors',
+      Format('%d wrong', [Calls]));
+  Check(Nodes = 0, 'concurrent node calls: 4 threads x 50 NodeId/Endpoint/Health/List',
+    Format('%d wrong', [Nodes]));
 end;
 
 procedure TestInterop;
