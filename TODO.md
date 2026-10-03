@@ -11,4 +11,4 @@ binding ABI v1 (polycall >= 1.1.0).
 - [x] Loader errors (missing / old / ABI-mismatched library), valgrind run
 - [ ] Windows run (FPC + polycall.dll / libpolycall.dll via -dPOLYCALL_MINGW) --
       needs Free Pascal on the Windows host
-- [ ] Publish `@obinexusltd/pascal-polycall` publicly on npm (not published)
+- [ ] Publish `pascal-polycall` publicly on npm (not published)

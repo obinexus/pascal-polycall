@@ -6,7 +6,7 @@ const path = require('node:path');
 const binding = require('..');
 const metadata = require('../package.json');
 
-assert.equal(metadata.name, '@obinexusltd/pascal-polycall');
+assert.equal(metadata.name, 'pascal-polycall');
 assert.equal(metadata.license, 'MIT');
 assert.equal(metadata.publishConfig.access, 'public');
 

@@ -1,4 +1,4 @@
-# @obinexusltd/pascal-polycall
+# pascal-polycall
 
 Free Pascal binding for the [Polycall](https://github.com/obinexus/polycall)
 core (**polycall >= 1.1.0**, binding ABI v1).
@@ -12,7 +12,7 @@ the core.
 ## Install
 
 ```sh
-npm install @obinexusltd/pascal-polycall
+npm install pascal-polycall
 ```
 
 This is a native source package (not yet published): the tarball contains

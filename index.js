@@ -61,7 +61,7 @@ function resolve(directoryName, ...segments) {
 }
 
 module.exports = Object.freeze({
-  packageName: '@obinexusltd/pascal-polycall',
+  packageName: 'pascal-polycall',
   projectRoot: __dirname,
   directories,
   resolve,

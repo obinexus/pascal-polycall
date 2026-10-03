@@ -1,5 +1,5 @@
 {
-  "name": "@obinexusltd/pascal-polycall",
+  "name": "pascal-polycall",
   "version": "1.0.0",
   "description": "Free Pascal binding for the Polycall core (polycall >= 1.1.0, binding ABI 1): cdecl externals over <polycall.h>.",
   "main": "index.js",
