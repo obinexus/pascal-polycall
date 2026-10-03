@@ -8,5 +8,7 @@ binding ABI v1 (polycall >= 1.1.0).
 - [x] `TPolycallPeer`, `PolycallCall`, `PolycallDescribe`, version/ABI check
 - [x] `EPolycallError` with status, strerror name, last_error detail, output
 - [x] Free Pascal installed in the QA image; real-core tests + C CLI interop
-- [ ] Windows run (FPC + polycall.dll / libpolycall.dll via -dPOLYCALL_MINGW)
+- [x] Loader errors (missing / old / ABI-mismatched library), valgrind run
+- [ ] Windows run (FPC + polycall.dll / libpolycall.dll via -dPOLYCALL_MINGW) --
+      needs Free Pascal on the Windows host
 - [ ] Publish `@obinexusltd/pascal-polycall` publicly on npm (not published)

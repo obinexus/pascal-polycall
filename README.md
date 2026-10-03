@@ -63,22 +63,38 @@ installed core found through pkg-config:
 
 ```sh
 export PKG_CONFIG_PATH=/opt/polycall/lib/pkgconfig LD_LIBRARY_PATH=/opt/polycall/lib
-make            # compile the unit
-make test       # real-core test + interop with the polycall CLI
-make example    # examples/basic.pas
-npm test        # make test + verify-dry + npm package test
+make              # compile the unit
+make test         # real-core test + interop with the polycall CLI
+make test-loader  # missing library / old library / ABI mismatch (Linux)
+make memcheck     # the real-core test under valgrind memcheck
+make example      # examples/basic.pas
+npm test          # make test + verify-dry + npm package test
 ```
 
 Programs using the unit need `-Fl<prefix>/lib` (the Makefile takes it from
 `pkg-config --variable=libdir polycall`); programs using `TThread` on Unix
 put `cthreads` first in their `uses` clause. On Windows the unit expects
 `polycall.dll` (MSVC build) or, with `-dPOLYCALL_MINGW`, `libpolycall.dll`;
-Windows is not tested yet.
+Windows has not been run yet -- the QA host has no Free Pascal.
 
 `make test` runs `tests/pascal_polycall_test.pas` through `tests/run-real.sh`,
-which starts `polycall peer serve` and `polycall start`; a missing `fpc` or
-polycall CLI is reported as SKIP (exit 77), never as success. See
-[tests/TESTS.md](tests/TESTS.md).
+which starts `polycall peer serve` and `polycall start`; a missing `fpc`,
+polycall CLI or valgrind is reported as SKIP (exit 77), never as success.
+See [tests/TESTS.md](tests/TESTS.md).
+
+### Loading
+
+The unit's `external` declarations make the program depend on the core
+(`libpolycall.so.1`), so the dynamic loader resolves it when the program
+starts. A missing library stops the program with the loader's
+`libpolycall.so.1: cannot open shared object file` (exit 127); a 1.0
+library without the binding ABI v1 symbols with `undefined symbol:
+polycall_...` (exit 127); neither is a crash. A library that reports another
+binding ABI is refused: `PolycallCheckABI`, `PolycallRunConfig`,
+`PolycallDescribe`, `PolycallCall` / `PolycallCallStatus` and
+`TPolycallPeer.Create*` return or raise `POLYCALL_E_UNSUPPORTED` (the raising
+forms with an `EPolycallError` naming the ABI it reported).
+`make test-loader` checks all three against fake libraries.
 
 ## License
 
