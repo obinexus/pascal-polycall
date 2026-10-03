@@ -131,7 +131,8 @@ function PolycallDescribe(const ConfigPath: UTF8String): string;
 { One polycall_rpc v1 round trip (never retried). InputJson '' = null. }
 function PolycallCall(const Endpoint, Service, Operation: string;
   const InputJson: string = ''; TimeoutMs: cuint32 = 5000): string;
-{ Non-raising form: Output is the result JSON or the remote error object. }
+{ Non-raising form: Output is the result JSON or the remote error object;
+  a library not speaking binding ABI 1 gives POLYCALL_E_UNSUPPORTED. }
 function PolycallCallStatus(const Endpoint, Service, Operation, InputJson: string;
   TimeoutMs: cuint32; out Output: string): LongInt;
 
@@ -343,7 +344,11 @@ var
   Buf: RawByteString;
   Len: csize_t;
 begin
-  RequireABI;
+  if c_abi_version <> PolycallExpectedABI then
+  begin
+    Output := '';   { non-raising form: report, do not raise }
+    Exit(POLYCALL_E_UNSUPPORTED);
+  end;
   SetLength(Buf, PolycallMaxCallOutput + 1);
   Buf[1] := #0;
   Len := 0;
@@ -361,6 +366,7 @@ var
   Status: LongInt;
   Output: string;
 begin
+  RequireABI;   { raises EPolycallError naming the ABI it found }
   Status := PolycallCallStatus(Endpoint, Service, Operation, InputJson, TimeoutMs, Output);
   if Status <> POLYCALL_OK then
     raise EPolycallError.CreateFor(Status,
